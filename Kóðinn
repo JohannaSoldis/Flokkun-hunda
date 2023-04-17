@@ -1,0 +1,226 @@
+import tarfile
+import os
+import random
+from PIL import Image
+from sklearn.model_selection import train_test_split
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from skimage.transform import resize
+import tensorflow as tf
+from keras.applications import VGG16
+from keras.models import Sequential
+from keras.layers import Dense, Flatten, Dropout
+from keras.callbacks import ModelCheckpoint
+from keras.callbacks import EarlyStopping
+from keras.callbacks import CSVLogger
+from keras.callbacks import ReduceLROnPlateau
+from keras.preprocessing.image import ImageDataGenerator
+from keras.applications.vgg16 import VGG16
+from keras.layers import Flatten, Dense, Dropout
+from keras.models import Model
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+import os
+
+folder_path = "/content/drive/MyDrive/Hundar"
+os.chdir('/content/drive/MyDrive/Hundar')
+
+from PIL import Image
+
+for file in os.listdir():
+    if file.endswith(".jpg"):
+        image = Image.open(file)
+
+img_dir = '/content/drive/MyDrive/Hundar'
+
+img_width, img_height = 224, 224
+channels = 3
+batch_size = 120
+num_images= 50
+image_arr_size= img_width * img_height * channels
+
+img_files = os.listdir(img_dir)
+print(img_files)
+
+# Þjálfunargögnin
+
+import os
+
+folder_path = "/content/drive/MyDrive/Hundar_test" #VOFFVOFF
+os.chdir('/content/drive/MyDrive/Hundar_test')
+
+from PIL import Image
+
+for file in os.listdir():
+    if file.endswith(".jpg"):
+        image = Image.open(file)
+
+test_dir = '/content/drive/MyDrive/Hundar_test'
+
+img_width, img_height = 224, 224
+img_files = os.listdir(test_dir)
+print(img_files)
+
+# Splitta í train og validation gögn
+
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20, 
+    width_shift_range=0.2, 
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    validation_split=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest')
+
+valid_datagen = ImageDataGenerator(
+    rescale= 1./255, 
+    validation_split=0.2, 
+)
+
+train_generator = train_datagen.flow_from_directory(
+        img_dir,
+        target_size=(224, 224),
+        batch_size=32,  
+        class_mode='binary',
+        subset='training', #bætti við svo það splitti í train og val..
+        shuffle= True, #bætti við
+        seed= 1337 #bætti við
+    )
+
+validation_generator = valid_datagen.flow_from_directory(
+        img_dir,
+        target_size=(224, 224),
+        batch_size=32,
+        class_mode='binary',
+        subset='validation', #bætti við
+        shuffle= True, #bætti við
+        seed= 1337 #bætti við
+    )
+    
+# Síðan þjálfunargögnin:
+
+test_datagen = ImageDataGenerator(rescale=1./255) #ÉG fitta ekki þessi gögn - annars er ég að overfitta
+
+test_generator = test_datagen.flow_from_directory(
+        test_dir,
+        target_size=(224, 224),
+        batch_size=32,
+        class_mode='binary',
+        shuffle=True,
+        seed=1337)
+        
+# VGG-16
+
+input_shape = (224, 224, 3)
+
+vgg16_base = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# Frysti pre-trained lögin
+for layer in vgg16_base.layers:
+    layer.trainable = False
+
+# Bætti við nýjum lögum á pre-trained lögin
+x = Flatten()(vgg16_base.output)
+x = Dense(512, activation='relu')(x)
+x = Dropout(0.5)(x)
+x = Dense(256, activation='relu')(x)
+x = Dropout(0.5)(x)
+predictions = Dense(1, activation='sigmoid')(x)
+
+model = Model(inputs=vgg16_base.input, outputs=predictions) #Loka módelið
+
+# Til að ég sé ekki að overfitta
+early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, verbose=1)
+
+model.compile(loss='binary_crossentropy',
+              optimizer=tf.keras.optimizers.RMSprop(lr=1e-4),
+              metrics=['accuracy']) 
+
+model.summary()
+
+history = model.fit_generator(
+      train_generator,
+      steps_per_epoch=train_generator.samples/train_generator.batch_size ,
+      epochs=30,
+      validation_data=validation_generator,
+      validation_steps=validation_generator.samples/validation_generator.batch_size,
+      callbacks=[early_stop, reduce_lr],
+      verbose=1)
+
+plt.figure(figsize=(12, 8))
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model history')
+
+plt.xlabel('epoch')
+plt.legend(['train_acc', 'val_acc', 'train_loss', 'val_loss'], loc='upper left')
+
+plt.show()
+
+plt.subplot()
+plt.title('Model Accuracy')
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.ylabel('Accuracy')
+plt.xlabel('Epochs')
+plt.legend(['Training Accuracy','Validation Accuracy'])
+plt.savefig('baseline_acc_epoch.png', transparent= False, bbox_inches= 'tight', dpi= 900)
+plt.show()
+
+plt.title('Model Loss')
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.ylabel('Loss')
+plt.xlabel('Epochs')
+plt.legend(['Training Loss','Validation Loss'])
+plt.savefig('baseline_loss_epoch.png', transparent= False, bbox_inches= 'tight', dpi= 900)
+plt.show()
+
+from keras.models import load_model
+
+# Meta accuracy út frá validation gögnunum 
+score = model.evaluate(validation_generator, steps=len(validation_generator))
+
+print("Validation Loss:", score[0]) 
+print("Validation Accuracy:", score[1])
+
+# Meta accuracy út frá test gögnunum 
+score = model.evaluate(test_generator, steps=len(test_generator))
+
+print("Test Loss:", score[0])
+print("Test Accuracy:", score[1])
+
+# Svo er þetta líka er ekki viss með þetta... 
+
+from keras.models import load_model
+from sklearn.metrics import confusion_matrix, classification_report
+
+#ER ÞETTA KÓÐI Á TEST GÖGN?? ER ÞETTA EKKI BARA Á VALIDATION GÖGNIN?
+
+# Generate predictions on the test data
+y_pred = model.predict_generator(test_generator) #Hér ætti að vera shuffle??
+
+# Convert the predicted probabilities to class labels
+y_pred_classes = np.argmax(y_pred, axis=1)
+
+# Get the actual class labels
+y_true = test_generator.classes
+
+# Calculate the confusion matrix
+confusion_mtx = confusion_matrix(y_true, y_pred_classes)
+
+# Calculate precision, recall, and F1 score
+report = classification_report(y_true, y_pred_classes)
+
+# Print the confusion matrix and classification report
+print('Confusion Matrix:\n', confusion_mtx)
+print('Classification Report:\n', report)
