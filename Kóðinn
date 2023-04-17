@@ -132,6 +132,10 @@ reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, verbos
 model.compile(loss='binary_crossentropy',
               optimizer=tf.keras.optimizers.RMSprop(lr=1e-4),
               metrics=['accuracy']) 
+              
+# Til að sjá tauganetið
+SVG(model_to_dot(model).create(prog='dot', format='svg'))
+plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True, expand_nested=True)
 
 model.summary()
 
@@ -187,28 +191,74 @@ score = model.evaluate(test_generator, steps=len(test_generator))
 print("Test Loss:", score[0])
 print("Test Accuracy:", score[1])
 
-# Svo er þetta líka er ekki viss með þetta... 
 
-from keras.models import load_model
-from sklearn.metrics import confusion_matrix, classification_report
+# EKKI BÚIN AÐ KEYRA - ER AÐ REYNA AÐ PLOTTA
 
-#ER ÞETTA KÓÐI Á TEST GÖGN?? ER ÞETTA EKKI BARA Á VALIDATION GÖGNIN?
+predictions = model.predict(validation_generator, verbose=1) # verbose shows us how long there is to go
+predictions
 
-# Generate predictions on the test data
-y_pred = model.predict_generator(test_generator) #Hér ætti að vera shuffle??
+predictions.shape
 
-# Convert the predicted probabilities to class labels
-y_pred_classes = np.argmax(y_pred, axis=1)
+print(predictions[0])
+print(f"Max value (probability of prediction): {np.max(predictions[0])}") # the max probability value predicted by the model
+print(f"Sum: {np.sum(predictions[0])}") # because we used softmax activation in our model, this will be close to 1
+print(f"Max index: {np.argmax(predictions[0])}") # the index of where the max value in predictions[0] occurs
+print(f"Predicted label: {img_dir[np.argmax(predictions[0])]}") # the predicted label
 
-# Get the actual class labels
-y_true = test_generator.classes
+def get_pred_label(prediction_probabilities):
+  """
+  Turns an array of prediction probabilities into a label.
+  """
+  return img_dir[np.argmax(prediction_probabilities)]
 
-# Calculate the confusion matrix
-confusion_mtx = confusion_matrix(y_true, y_pred_classes)
+# Get a predicted label based on an array of prediction probabilities
+pred_label = get_pred_label(predictions[0])
+pred_label
 
-# Calculate precision, recall, and F1 score
-report = classification_report(y_true, y_pred_classes)
+import numpy as np
 
-# Print the confusion matrix and classification report
-print('Confusion Matrix:\n', confusion_mtx)
-print('Classification Report:\n', report)
+# Define label mapping dictionary or list
+label_mapping = {0: "cat", 1: "dog"}
+
+# Iterate over the batches and extract the images and labels
+images = []
+labels = []
+for image_batch, label_batch in validation_generator:
+    for image, label in zip(image_batch, label_batch):
+        images.append(image)
+        labels.append(label_mapping[np.argmax(label)])
+
+# Convert lists to arrays
+val_images = np.array(images)
+val_labels = np.array(labels)
+
+print(val_images[0], val_labels[0])
+
+def plot_pred(prediction_probabilities, labels, images, n=1):
+  """
+  View the prediction, ground truth label and image for sample n.
+  """
+  pred_prob, true_label, image = prediction_probabilities[n], labels[n], images[n]
+  
+  # Get the pred label
+  pred_label = get_pred_label(pred_prob)
+  
+  # Plot image & remove ticks
+  plt.imshow(image)
+  plt.xticks([])
+  plt.yticks([])
+
+  # Change the color of the title depending on if the prediction is right or wrong
+  if pred_label == true_label:
+    color = "green"
+  else:
+    color = "red"
+
+  plt.title("{} {:2.0f}% ({})".format(pred_label,
+                                      np.max(pred_prob)*100,
+                                      true_label),
+                                      color=color)
+
+plot_pred(prediction_probabilities=predictions,
+          labels=val_labels,
+          images=val_images)
