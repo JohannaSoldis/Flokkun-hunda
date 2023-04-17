@@ -11,6 +11,8 @@ from skimage.transform import resize
 import tensorflow as tf
 from keras.applications import VGG16
 from keras.models import Sequential
+from keras.models import Model
+from keras.models import load_model
 from keras.layers import Dense, Flatten, Dropout
 from keras.callbacks import ModelCheckpoint
 from keras.callbacks import EarlyStopping
@@ -19,38 +21,16 @@ from keras.callbacks import ReduceLROnPlateau
 from keras.preprocessing.image import ImageDataGenerator
 from keras.applications.vgg16 import VGG16
 from keras.layers import Flatten, Dense, Dropout
-from keras.models import Model
 
 from google.colab import drive
 drive.mount('/content/drive')
 
-import os
-
-folder_path = "/content/drive/MyDrive/Hundar"
+folder_path = "/content/drive/MyDrive/Hundar" #VOFFVOFF
 os.chdir('/content/drive/MyDrive/Hundar')
 
-from PIL import Image
+# Prófunargögnin (testing data)
 
-for file in os.listdir():
-    if file.endswith(".jpg"):
-        image = Image.open(file)
-
-img_dir = '/content/drive/MyDrive/Hundar'
-
-img_width, img_height = 224, 224
-channels = 3
-batch_size = 120
-num_images= 50
-image_arr_size= img_width * img_height * channels
-
-img_files = os.listdir(img_dir)
-print(img_files)
-
-# Þjálfunargögnin
-
-import os
-
-folder_path = "/content/drive/MyDrive/Hundar_test" #VOFFVOFF
+folder2_path = "/content/drive/MyDrive/Hundar_test"
 os.chdir('/content/drive/MyDrive/Hundar_test')
 
 from PIL import Image
@@ -59,11 +39,21 @@ for file in os.listdir():
     if file.endswith(".jpg"):
         image = Image.open(file)
 
+img_dir = '/content/drive/MyDrive/Hundar'
 test_dir = '/content/drive/MyDrive/Hundar_test'
 
 img_width, img_height = 224, 224
-img_files = os.listdir(test_dir)
-print(img_files)
+# Úr samanburðarmódelinu
+channels = 3
+batch_size = 120 #Minnka/stækka þetta svo model.fit taki ekki heila eilíf var í 64
+num_images= 50
+image_arr_size= img_width * img_height * channels
+
+img_files = os.listdir(img_dir)
+print('Þjálfunargögnin: ', img_files)
+
+test_files = os.listdir(test_dir)
+print('Prófunargögnin: ', test_files)
 
 # Splitta í train og validation gögn
 
@@ -103,7 +93,7 @@ validation_generator = valid_datagen.flow_from_directory(
         seed= 1337 #bætti við
     )
     
-# Síðan þjálfunargögnin:
+# Síðan prófunargögnin:
 
 test_datagen = ImageDataGenerator(rescale=1./255) #ÉG fitta ekki þessi gögn - annars er ég að overfitta
 
@@ -184,8 +174,6 @@ plt.xlabel('Epochs')
 plt.legend(['Training Loss','Validation Loss'])
 plt.savefig('baseline_loss_epoch.png', transparent= False, bbox_inches= 'tight', dpi= 900)
 plt.show()
-
-from keras.models import load_model
 
 # Meta accuracy út frá validation gögnunum 
 score = model.evaluate(validation_generator, steps=len(validation_generator))
