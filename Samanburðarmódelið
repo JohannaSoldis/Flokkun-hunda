@@ -1,0 +1,26 @@
+import tarfile
+import os
+import random
+from PIL import Image
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+tar = tarfile.open('/content/drive/My Drive/images.tar')
+tar.extractall(path='/content/images')
+tar.close()
+
+os.makedirs('/content/images/Images', exist_ok=True)
+
+img_dir = '/content/images/Images'
+for dirpath, dirnames, filenames in os.walk('/content/images'):
+    for filename in filenames:
+        src_path = os.path.join(dirpath, filename)
+        dst_path = os.path.join(img_dir, filename)
+        os.rename(src_path, dst_path)
+
+img_files = os.listdir(img_dir)
+img_file = random.choice(img_files)
+img_path = os.path.join(img_dir, img_file)
+img = Image.open(img_path)
+img.show()
